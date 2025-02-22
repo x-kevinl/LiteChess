@@ -1,3 +1,7 @@
+// main.js
+
+const socket = io();
+
 const lobby = document.getElementById('lobby');
 const gameContainer = document.getElementById('gameContainer');
 const createGameBtn = document.getElementById('createGame');
@@ -5,65 +9,67 @@ const joinGameBtn = document.getElementById('joinGame');
 const gameCodeInput = document.getElementById('gameCode');
 
 let board, game;
-let whiteTime = 300, blackTime = 300; // 300 seconds = 5 minutes per side
+let gameCode = '';
+let playerColor = ''; // 'w' for white, 'b' for black
+let whiteTime = 300, blackTime = 300; // 5 minutes per side (in seconds)
 let timerInterval;
 
-// Function to start the timers
+// Timer functions
 function startTimer() {
   clearInterval(timerInterval);
   timerInterval = setInterval(() => {
-    // Check whose turn it is
-    if(game.turn() === 'w'){
+    // Decrease time for the side whose turn it is
+    if (game.turn() === 'w') {
       whiteTime--;
       document.getElementById('whiteTimer').innerText = formatTime(whiteTime);
     } else {
       blackTime--;
       document.getElementById('blackTimer').innerText = formatTime(blackTime);
     }
-    // End game if time runs out
-    if(whiteTime <= 0 || blackTime <= 0) {
+    if (whiteTime <= 0 || blackTime <= 0) {
       clearInterval(timerInterval);
       alert('Time is up!');
     }
   }, 1000);
 }
 
-// Helper to format seconds into MM:SS
 function formatTime(seconds) {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${('0' + mins).slice(-2)}:${('0' + secs).slice(-2)}`;
 }
 
-// Chessboard move event: restrict moving opponent pieces
+// Only allow dragging if it's the player's turn and they own the piece.
 function onDragStart(source, piece, position, orientation) {
-  if ((game.turn() === 'w' && piece.startsWith('b')) ||
-      (game.turn() === 'b' && piece.startsWith('w'))) {
+  if (game.turn() !== playerColor) return false;
+  if ((playerColor === 'w' && piece.charAt(0) !== 'w') ||
+      (playerColor === 'b' && piece.charAt(0) !== 'b')) {
     return false;
   }
 }
 
-// Handle piece drops and legal moves
 function onDrop(source, target) {
-  const move = game.move({
+  let move = game.move({
     from: source,
     to: target,
-    promotion: 'q' // always promote to a queen for simplicity
+    promotion: 'q' // always promote to queen for simplicity
   });
   if (move === null) return 'snapback';
+  board.position(game.fen());
+  // Emit move event to the server along with the updated FEN
+  socket.emit('move', { code: gameCode, move: move.san, fen: game.fen() });
 }
 
-// Update board position after move animations
 function onSnapEnd() {
   board.position(game.fen());
 }
 
-// Initialize a new game
-function startGame() {
-  game = new Chess();
+// Initialize the game with a given FEN (or start position)
+function startGame(initialFen) {
+  game = new Chess(initialFen || 'start');
   board = Chessboard('board', {
     draggable: true,
-    position: 'start',
+    position: game.fen(),
     onDragStart: onDragStart,
     onDrop: onDrop,
     onSnapEnd: onSnapEnd
@@ -73,18 +79,16 @@ function startGame() {
   startTimer();
 }
 
-// Generate a random three-digit code
+// Generate a random three-digit game code
 function generateCode() {
   return Math.floor(100 + Math.random() * 900).toString();
 }
 
-// Event listeners for lobby buttons
+// Lobby button event listeners
 createGameBtn.addEventListener('click', () => {
-  const code = generateCode();
-  alert('Your game code is: ' + code);
-  // In a complete implementation, the code would be sent to a backend server
-  // to create and register a new public game session.
-  startGame();
+  gameCode = generateCode();
+  alert('Your game code is: ' + gameCode);
+  socket.emit('createGame', gameCode);
 });
 
 joinGameBtn.addEventListener('click', () => {
@@ -93,6 +97,37 @@ joinGameBtn.addEventListener('click', () => {
     alert('Please enter a valid 3-digit code.');
     return;
   }
-  // In a complete implementation, the code would be validated with the backend server.
-  startGame();
+  gameCode = code;
+  socket.emit('joinGame', gameCode);
+});
+
+// Socket event handlers
+socket.on('gameCreated', (data) => {
+  playerColor = 'w'; // The creator is white
+  startGame(data.fen);
+});
+
+socket.on('gameJoined', (data) => {
+  playerColor = 'b'; // The joiner is black
+  startGame(data.fen);
+});
+
+socket.on('playerJoined', () => {
+  console.log('An opponent has joined your game.');
+});
+
+socket.on('move', (data) => {
+  // Update the game state when receiving an opponent’s move
+  if (game.fen() !== data.fen) {
+    game.load(data.fen);
+    board.position(data.fen);
+  }
+});
+
+socket.on('errorMessage', (msg) => {
+  alert(msg);
+});
+
+socket.on('opponentDisconnected', () => {
+  alert('Your opponent has disconnected.');
 });
