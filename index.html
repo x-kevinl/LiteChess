@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>LiteChess</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- Include chess.js for chess logic and chessboard.js for board UI -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.12.0/chess.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard.min.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- Lobby Section -->
+    <div id="lobby">
+      <h1>LiteChess</h1>
+      <button id="createGame">Create Game</button>
+      <div>
+        <input type="text" id="gameCode" placeholder="Enter 3-digit Code" maxlength="3">
+        <button id="joinGame">Join Game</button>
+      </div>
+    </div>
+    <!-- Game Section -->
+    <div id="gameContainer" style="display:none;">
+      <div id="board" style="width: 400px; margin: auto;"></div>
+      <div id="timer">
+        <div>
+          <strong>White:</strong> <span id="whiteTimer">05:00</span>
+        </div>
+        <div>
+          <strong>Black:</strong> <span id="blackTimer">05:00</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="main.js"></script>
+</body>
+</html>
